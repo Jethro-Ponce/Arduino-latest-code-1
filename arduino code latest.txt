@@ -1,0 +1,74 @@
+#include <ESP8266WiFi.h>
+
+#define SENSOR_IN A0
+#define SENSOR_PIN D2    
+#define FLOW_CALIBRATION_FACTOR 4.5  // Modify this value based on your sensor's calibration
+const int valve = D3;
+
+volatile byte pulseCount;
+float flowRate;
+unsigned int totalMilliLitres;
+unsigned long oldTime;
+
+void ICACHE_RAM_ATTR pulseCounter() {
+  pulseCount++;
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(SENSOR_PIN, INPUT_PULLUP);
+  pinMode(valve, OUTPUT);
+
+  pulseCount = 0;
+  flowRate = 0.0;
+  totalMilliLitres = 0;
+  oldTime = 0;
+
+  attachInterrupt(digitalPinToInterrupt(SENSOR_PIN), pulseCounter, FALLING);
+}
+
+void loop() {
+  unsigned long currentTime = millis();
+  unsigned long elapsedTime = currentTime - oldTime;
+
+  if (elapsedTime > 1000) {
+    detachInterrupt(digitalPinToInterrupt(SENSOR_PIN));
+    flowRate = ((1000.0 / elapsedTime) * pulseCount) / FLOW_CALIBRATION_FACTOR;
+    pulseCount = 0;
+    oldTime = currentTime;
+    attachInterrupt(digitalPinToInterrupt(SENSOR_PIN), pulseCounter, FALLING);
+  }
+
+  // Calculate total water quantity in milliliters (mL) since starting
+  totalMilliLitres += (flowRate / 60) * 1000 * (elapsedTime / 1000.0);
+
+  // Print flow rate and total water quantity
+  Serial.println();
+  Serial.print("Flow rate: ");
+  Serial.print(flowRate, 2);  // Print flow rate with 2 decimal places
+  Serial.println(" L/min");
+
+  Serial.print("Total Quantity: ");
+  Serial.print(totalMilliLitres);
+  Serial.println(" mL");
+
+  delay(1000); // Adjust the delay as needed to control the output rate
+  
+  digitalWrite(valve, HIGH);
+  delay(2000);
+  digitalWrite(valve, LOW);
+  delay(5000);
+
+  // Read sensor data or any other data you want to send
+  int output_value = analogRead(SENSOR_IN);
+  output_value = map(output_value, 550, 10, 0, 100);
+  Serial.println();
+  Serial.print("Moisture: ");
+  Serial.print(output_value);
+  Serial.print("%");
+  delay(1000);
+
+  
+}
+
